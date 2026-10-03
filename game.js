@@ -228,7 +228,7 @@ function update(dt){
   player.x=clamp(player.x,.19,.81);
 
   spawnTimer-=dt;coinTimer-=dt;
-  if(spawnTimer<=0){spawnTraffic();spawnTimer=rand(.75,1.35)/speed}
+  if(spawnTimer<=0){spawnTraffic();spawnTimer=rand(.75,1.35)/baseSpeed}
   if(coinTimer<=0){spawnCoin();coinTimer=rand(1.0,1.8)}
 
   for(let i=traffic.length-1;i>=0;i--){
@@ -271,7 +271,7 @@ function update(dt){
       pickups.splice(i,1);coins++;score+=75;burst(p.x,p.y,"#ffd94a",14);toastMsg("+ COIN")}
   }
 
-  score+=dt*22*speed;
+  score+=dt*22*playerSpeed;
   best=Math.max(best,Math.floor(score));
   scoreEl.textContent=Math.floor(score);bestEl.textContent=best;
   coinsEl.textContent=coins;
