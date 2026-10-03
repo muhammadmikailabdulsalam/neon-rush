@@ -6,13 +6,15 @@ const coinsEl=document.getElementById("coins"), speedEl=document.getElementById(
 const livesEl=document.getElementById("lives"), overlay=document.getElementById("overlay");
 const message=document.getElementById("message"), startBtn=document.getElementById("startBtn");
 const pauseBtn=document.getElementById("pauseBtn"), fullscreenBtn=document.getElementById("fullscreenBtn");
+const brakeBtn=document.getElementById("brakeBtn");
 const toast=document.getElementById("toast");
 
 let W=480,H=800,dpr=1;
 let state="menu", last=0, elapsed=0, score=0, coins=0, lives=3, best=Number(localStorage.getItem("neonRushBest")||0);
 let roadOffset=0, spawnTimer=0, coinTimer=0, shake=0;
 let selectedCar="cyan", steer=0;
-const keys={left:false,right:false};
+let braking=false, brakeAmount=0;
+const keys={left:false,right:false,brake:false};
 
 const player={x:.5,y:.82,w:.115,h:.19,vx:0};
 const traffic=[];
@@ -210,7 +212,13 @@ function hit(a,b){
 
 function update(dt){
   elapsed+=dt*1000;
-  const speed=Math.min(1.75, .75+score/9000);
+  const baseSpeed=Math.min(1.75, .75+score/9000);
+
+  // Braking smoothly reduces the game speed so there is more time
+  // to steer around traffic instead of making the car instantly stop.
+  const targetBrake=keys.brake?1:0;
+  brakeAmount += (targetBrake-brakeAmount)*Math.min(1,dt*12);
+  const speed=baseSpeed*(1-brakeAmount*.62);
   roadOffset=(roadOffset+dt*speed*.9)%1;
 
   const target=(keys.left?-1:0)+(keys.right?1:0);
@@ -247,7 +255,8 @@ function update(dt){
   score+=dt*22*speed;
   best=Math.max(best,Math.floor(score));
   scoreEl.textContent=Math.floor(score);bestEl.textContent=best;
-  coinsEl.textContent=coins;speedEl.textContent=Math.floor(90+speed*70);
+  coinsEl.textContent=coins;
+  speedEl.textContent=Math.floor((90+baseSpeed*70)*(1-brakeAmount*.62));
   livesEl.innerHTML="♥".repeat(lives).split("").map(x=>`<span class="life">${x}</span>`).join("");
   updateParticles(dt);
 }
@@ -287,6 +296,7 @@ requestAnimationFrame(gameLoop);
 
 function startGame(){
   score=0;coins=0;lives=3;spawnTimer=.5;coinTimer=1;traffic.length=0;pickups.length=0;particles.length=0;
+  braking=false;brakeAmount=0;keys.brake=false;
   state="playing";overlay.classList.remove("show");pauseBtn.textContent="Ⅱ";fullscreen();
 }
 function pauseGame(){
@@ -316,11 +326,13 @@ function setKey(dir,on){keys[dir]=on}
 addEventListener("keydown",e=>{
   if(["ArrowLeft","a","A"].includes(e.key)){setKey("left",true);e.preventDefault()}
   if(["ArrowRight","d","D"].includes(e.key)){setKey("right",true);e.preventDefault()}
+  if(["ArrowDown","s","S"].includes(e.key)){setKey("brake",true);e.preventDefault()}
   if(e.key===" "||e.key==="p"||e.key==="P")pauseGame();
 });
 addEventListener("keyup",e=>{
   if(["ArrowLeft","a","A"].includes(e.key))setKey("left",false);
   if(["ArrowRight","d","D"].includes(e.key))setKey("right",false);
+  if(["ArrowDown","s","S"].includes(e.key))setKey("brake",false);
 });
 
 function bindControl(id,dir){
@@ -331,6 +343,16 @@ function bindControl(id,dir){
   ["pointerup","pointercancel","pointerleave"].forEach(x=>el.addEventListener(x,off));
 }
 bindControl("leftBtn","left");bindControl("rightBtn","right");
+
+function bindBrake(){
+  const el=brakeBtn;
+  if(!el) return;
+  const on=e=>{e.preventDefault();keys.brake=true;braking=true;el.classList.add("active");toastMsg("BRAKE");};
+  const off=e=>{e.preventDefault();keys.brake=false;braking=false;el.classList.remove("active");};
+  el.addEventListener("pointerdown",on);
+  ["pointerup","pointercancel","pointerleave"].forEach(x=>el.addEventListener(x,off));
+}
+bindBrake();
 
 bestEl.textContent=best;
 livesEl.innerHTML="♥♥♥".split("").map(x=>`<span class="life">${x}</span>`).join("");
