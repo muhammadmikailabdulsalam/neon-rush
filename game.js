@@ -214,12 +214,13 @@ function update(dt){
   elapsed+=dt*1000;
   const baseSpeed=Math.min(1.75, .75+score/9000);
 
-  // Braking smoothly reduces the game speed so there is more time
-  // to steer around traffic instead of making the car instantly stop.
+  // Brake changes ONLY the player's speed. Traffic keeps its own speed;
+  // the visible movement of traffic is based on the relative speed between
+  // the player's car and each traffic car.
   const targetBrake=keys.brake?1:0;
   brakeAmount += (targetBrake-brakeAmount)*Math.min(1,dt*12);
-  const speed=baseSpeed*(1-brakeAmount*.62);
-  roadOffset=(roadOffset+dt*speed*.9)%1;
+  const playerSpeed=baseSpeed*(1-brakeAmount*.62);
+  roadOffset=(roadOffset+dt*playerSpeed*.9)%1;
 
   const target=(keys.left?-1:0)+(keys.right?1:0);
   steer += (target-steer)*Math.min(1,dt*10);
@@ -231,20 +232,38 @@ function update(dt){
   if(coinTimer<=0){spawnCoin();coinTimer=rand(1.0,1.8)}
 
   for(let i=traffic.length-1;i>=0;i--){
-    const t=traffic[i]; t.y += dt*(170+speed*90)*t.speed;
+    const t=traffic[i];
+    // Traffic has its own speed. Braking reduces the player's speed, so
+    // traffic approaches more slowly instead of every car slowing down.
+    const relativeSpeed=Math.max(.14,playerSpeed*1.05-t.speed*.35);
+    t.y += dt*(170+relativeSpeed*90);
     if(t.y>H+120){traffic.splice(i,1);score+=15;continue}
     t.x=projectX(t.n,t.y);
     t.w=roadAt(t.y).width*.19;t.h=t.w*1.65;
-    const px=projectX(player.x,player.y*H);
-    if(hit({x:px,y:player.y*H,w:roadAt(player.y*H).width*.22,h:H*.16},{x:t.x,y:t.y,w:t.w,h:t.h})){
-      traffic.splice(i,1);lives--;shake=.25;burst(px,player.y*H,"#ff4770",28);
+    const py=player.y*H;
+    const px=projectX(player.x,py);
+    const pw=roadAt(py).width*.22, ph=H*.16;
+
+    // Crash is front-to-rear only. Merely scraping/passing the side of a
+    // traffic car does NOT count as a crash.
+    const playerFront=py-ph/2;
+    const playerRear=py+ph/2;
+    const trafficFront=t.y-t.h/2;
+    const trafficRear=t.y+t.h/2;
+    const verticalOverlap=playerRear>trafficFront && playerFront<trafficRear;
+    const centerLaneOverlap=Math.abs(px-t.x)<Math.min(pw,t.w)*.43;
+
+    if(verticalOverlap && centerLaneOverlap){
+      traffic.splice(i,1);lives--;shake=.25;burst(px,py,"#ff4770",28);
       toastMsg("CRASH!");
       if(lives<=0){gameOver();return}
     }
   }
 
   for(let i=pickups.length-1;i>=0;i--){
-    const p=pickups[i];p.y+=dt*(170+speed*90)*.8;p.spin+=dt*7;
+    const p=pickups[i];
+    p.y+=dt*(170+playerSpeed*90)*.8;
+    p.spin+=dt*7;
     p.x=projectX(p.n,p.y);
     if(p.y>H+50){pickups.splice(i,1);continue}
     const px=projectX(player.x,player.y*H);
@@ -256,7 +275,7 @@ function update(dt){
   best=Math.max(best,Math.floor(score));
   scoreEl.textContent=Math.floor(score);bestEl.textContent=best;
   coinsEl.textContent=coins;
-  speedEl.textContent=Math.floor((90+baseSpeed*70)*(1-brakeAmount*.62));
+  speedEl.textContent=Math.floor(90+playerSpeed*70);
   livesEl.innerHTML="♥".repeat(lives).split("").map(x=>`<span class="life">${x}</span>`).join("");
   updateParticles(dt);
 }
